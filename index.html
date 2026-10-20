@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TNCSC Hulling Agents & CMR Monitoring System</title>
+    <style>
+        :root {
+            --primary: #1b5e20;
+            --primary-dark: #0f3812;
+            --accent: #ff8f00;
+            --bg-light: #f4f6f8;
+            --white: #ffffff;
+            --text-main: #333333;
+            --border: #cccccc;
+            --danger: #c62828;
+            --success: #2e7d32;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-light); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
+
+        aside { width: 260px; background-color: var(--primary); color: var(--white); display: flex; flex-direction: column; }
+        aside .logo { padding: 20px; font-size: 1.1rem; font-weight: bold; background-color: var(--primary-dark); text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        aside nav { flex: 1; padding: 15px 0; overflow-y: auto; }
+        aside nav button { width: 100%; text-align: left; padding: 12px 20px; background: none; border: none; color: var(--white); font-size: 0.95rem; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 10px; }
+        aside nav button:hover, aside nav button.active { background-color: rgba(255,255,255,0.15); border-left: 4px solid var(--accent); }
+
+        main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        header { background-color: var(--white); padding: 15px 25px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        header h1 { font-size: 1.4rem; color: var(--primary); }
+        .user-badge { font-size: 0.85rem; background: #e8f5e9; color: var(--success); padding: 6px 12px; border-radius: 20px; font-weight: 600; }
+
+        .content-body { flex: 1; padding: 25px; overflow-y: auto; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .card { background: var(--white); border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .card h3 { margin-bottom: 15px; color: var(--primary); font-size: 1.1rem; border-bottom: 2px solid var(--bg-light); padding-bottom: 8px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
+        table th, table td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }
+        table th { background-color: #f1f8e9; color: var(--primary-dark); }
+        table tr:hover { background-color: #fafafa; }
+
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 15px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        .form-group label { font-size: 0.85rem; font-weight: 600; color: #555; }
+        .form-group input, .form-group select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.9rem; }
+        
+        .btn { padding: 9px 18px; background-color: var(--primary); color: var(--white); border: none; border-radius: 4px; cursor: pointer; font-weight: 600; transition: background 0.2s; }
+        .btn:hover { background-color: var(--primary-dark); }
+        .btn-danger { background-color: var(--danger); }
+        .btn-danger:hover { background-color: #990000; }
+        .btn-secondary { background-color: #6c757d; }
+        .btn-secondary:hover { background-color: #5a6268; }
+
+        .actions-bar { display: flex; gap: 10px; margin-top: 15px; }
+        .alert { padding: 10px 15px; border-radius: 4px; margin-bottom: 15px; font-size: 0.9rem; display: none; }
+        .alert-error { background-color: #ffebee; color: var(--danger); border: 1px solid #ffcdd2; }
+        .alert-success { background-color: #e8f5e9; color: var(--success); border: 1px solid #c8e6c9; }
+
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .metric-card { background: var(--white); padding: 15px; border-radius: 8px; border-left: 4px solid var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .metric-card h4 { font-size: 0.8rem; color: #666; text-transform: uppercase; }
+        .metric-card p { font-size: 1.4rem; font-weight: bold; color: var(--primary-dark); margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <aside>
+        <div class="logo">TNCSC Hulling Portal</div>
+        <nav>
+            <button class="active" onclick="switchTab('dashboard', this)">📊 Dashboard & Reports</button>
+            <button onclick="switchTab('regionMaster', this)">🏛️ Region Master (39)</button>
+            <button onclick="switchTab('hullingMaster', this)">🏭 Hulling Agent Master</button>
+            <button onclick="switchTab('allotment', this)">📋 HO & Sub-Allotment</button>
+            <button onclick="switchTab('dailyEntry', this)">📝 Daily Transactions</button>
+        </nav>
+    </aside>
+
+    <main>
+        <header>
+            <h1 id="pageTitle">Dashboard & Summary Reports</h1>
+            <div class="user-badge" id="syncStatusBadge">System Active</div>
+        </header>
+
+        <div class="content-body">
+            <div id="globalAlert" class="alert"></div>
+
+            <!-- TAB 1: DASHBOARD -->
+            <div id="dashboard" class="tab-content active">
+                <div class="metrics-grid">
+                    <div class="metric-card"><h4>Total Regions</h4><p id="metricRegions">39</p></div>
+                    <div class="metric-card"><h4>Active Hulling Mills</h4><p id="metricMills">0</p></div>
+                    <div class="metric-card"><h4>Total Paddy Allotted (MT)</h4><p id="metricPaddyAllotted">0.00</p></div>
+                    <div class="metric-card"><h4>CMR Deposited (MT)</h4><p id="metricCmrDeposited">0.00</p></div>
+                </div>
+
+                <div class="card">
+                    <h3>Filter & Export Reports</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Filter Level</label>
+                            <select id="reportLevel" onchange="updateReportView()">
+                                <option value="region">Region Level</option>
+                                <option value="mill">Mill Level</option>
+                                <option value="ho">HO Level Summary</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="actions-bar">
+                        <button class="btn" onclick="exportToExcel()">📥 Export to Excel (CSV)</button>
+                        <button class="btn btn-secondary" onclick="exportToPDF()">🖨️ Export / Print Professional PDF</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 id="reportTableTitle">Region-Wise Performance</h3>
+                    <div style="overflow-x: auto;">
+                        <table id="reportTable"><thead></thead><tbody></tbody></table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: REGION MASTER -->
+            <div id="regionMaster" class="tab-content">
+                <div class="card">
+                    <h3>Manage Regions (39 Total)</h3>
+                    <input type="hidden" id="editRegionId">
+                    <div class="form-grid">
+                        <div class="form-group"><label>Region Name</label><input type="text" id="regNameInput" placeholder="e.g., Tenkasi"></div>
+                        <div class="form-group"><label>District Code</label><input type="text" id="regCodeInput" placeholder="e.g., TKS"></div>
+                    </div>
+                    <button class="btn" onclick="saveRegion()">Save Region</button>
+                    <button class="btn btn-secondary" onclick="resetRegionForm()" style="margin-left: 10px;">Cancel</button>
+                </div>
+                <div class="card">
+                    <h3>Existing Regions</h3>
+                    <table>
+                        <thead><tr><th>S.No</th><th>Region Name</th><th>Code</th><th>Actions</th></tr></thead>
+                        <tbody id="regionTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 3: HULLING MASTER -->
+            <div id="hullingMaster" class="tab-content">
+                <div class="card">
+                    <h3>Hulling Agent / Mill Registration</h3>
+                    <input type="hidden" id="editMillId">
+                    <div class="form-grid">
+                        <div class="form-group"><label>Region</label><select id="millRegionSelect"></select></div>
+                        <div class="form-group"><label>Mill Name</label><input type="text" id="millNameInput" placeholder="Rice Mill Name"></div>
+                        <div class="form-group"><label>Capacity (MT)</label><input type="number" id="millCapacityInput" placeholder="Capacity MT" step="0.01" oninput="calculateMillFinancials(true)"></div>
+                        <div class="form-group"><label>Economic Cost (₹ / MT)</label><input type="number" id="millEcoCostInput" value="36000" oninput="calculateMillFinancials(true)"></div>
+                        <div class="form-group"><label>25% Bank Guarantee (₹) [Editable]</label><input type="number" id="millBgInput" placeholder="25% BG Value" oninput="calculateMillFinancials(false)"></div>
+                        <div class="form-group"><label>90% Allowable Paddy Issue (MT)</label><input type="text" id="millAllowablePaddy" readonly style="background-color: #e8f5e9; font-weight: bold;" placeholder="0.00 MT"></div>
+                        <div class="form-group">
+                            <label>Mill Type</label>
+                            <select id="millTypeInput">
+                                <option value="Boiled Mill">Boiled Mill</option>
+                                <option value="Raw Mill">Raw Mill</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn" onclick="saveHullingMill()">Save Mill</button>
+                    <button class="btn btn-secondary" onclick="resetMillForm()" style="margin-left: 10px;">Cancel</button>
+                </div>
+                <div class="card">
+                    <h3>Registered Mills</h3>
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Mill Name</th>
+                                    <th>Region</th>
+                                    <th>Capacity</th>
+                                    <th>Economic Cost</th>
+                                    <th>25% BG Value (₹)</th>
+                                    <th>90% Allowable Paddy (MT)</th>
+                                    <th>Mill Type</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="millTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: ALLOTMENT -->
+            <div id="allotment" class="tab-content">
+                <div class="card">
+                    <h3>HO Region Allotment & Mill Sub-Allocation</h3>
+                    <input type="hidden" id="editAllotIndex">
+                    <div class="form-grid">
+                        <div class="form-group"><label>Month & Year</label><input type="month" id="allotMonth" value="2026-10" onchange="onRegionChangeForAlloc()"></div>
+                        <div class="form-group"><label>Target Region</label><select id="allotRegionSelect" onchange="onRegionChangeForAlloc()"></select></div>
+                        <div class="form-group"><label>Constant Region HO Allotment (MT)</label><input type="number" id="hoAllotPaddy" placeholder="Region HO Allotment" oninput="updateAllotmentBalanceCheck()"></div>
+                        <div class="form-group"><label>Target Mill (Sub-Allocation)</label><select id="allotMillSelect" onchange="updateAllotmentBalanceCheck()"></select></div>
+                        <div class="form-group"><label>Mill Sub-Allocation Qty (MT)</label><input type="number" id="regSubAllotPaddy" placeholder="Sub-Allot Qty"></div>
+                    </div>
+                    <div id="allotAllocWarning" class="alert alert-error" style="display:block; margin-bottom:15px;">
+                        <strong>Allotment Guardrails:</strong> Region HO Allotment is constant for the month. Sub-allocations cannot exceed mill capacity.
+                    </div>
+                    <button class="btn" onclick="saveAllotment()">Save Sub-Allocation Record</button>
+                    <button class="btn btn-secondary" onclick="resetAllotForm()" style="margin-left: 10px;">Cancel</button>
+                </div>
+                <div class="card">
+                    <h3>Allotment & Sub-Allocation Records</h3>
+                    <table>
+                        <thead><tr><th>Month</th><th>Region</th><th>Constant HO Allotment (MT)</th><th>Mill Sub-Allotted</th><th>Sub-Alloc Qty (MT)</th><th>Actions</th></tr></thead>
+                        <tbody id="allotTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 5: DAILY TRANSACTIONS -->
+            <div id="dailyEntry" class="tab-content">
+                <div class="card">
+                    <h3>Daily Paddy Issue & CMR Deposit</h3>
+                    <input type="hidden" id="editTransIndex">
+                    <div class="form-grid">
+                        <div class="form-group"><label>Transaction Date</label><input type="date" id="transDate"></div>
+                        <div class="form-group">
+                            <label>Select Hulling Mill</label>
+                            <select id="transMillSelect" onchange="updateTransactionMillContext()"></select>
+                        </div>
+                        <div class="form-group"><label>Paddy Issued Today (MT)</label><input type="number" id="transPaddyRec" value="0" step="0.01"></div>
+                        <div class="form-group">
+                            <label>Select Rice Deposit Variety</label>
+                            <select id="transRiceVariety">
+                                <option value="BRA">BRA (Boiled - Grade A @ 67%)</option>
+                                <option value="BRC">BRC (Boiled - Common @ 68%)</option>
+                                <option value="RRA">RRA (Raw - Grade A @ 67%)</option>
+                                <option value="RRC">RRC (Raw - Common @ 68%)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>CMR Rice Deposited Today (MT)</label><input type="number" id="transRiceDep" value="0" step="0.01">
+                        </div>
+                    </div>
+                    <div id="bgWarningBox" class="alert alert-error" style="display:block; margin-bottom: 15px;">
+                        <strong>Guardrails Status:</strong> Checking Sub-Allocation, 90% Bank Guarantee Limit, and Net Pending Paddy.
+                    </div>
+                    <button class="btn" onclick="saveTransaction()">Save Transaction</button>
+                    <button class="btn btn-secondary" onclick="resetTransForm()" style="margin-left: 10px;">Cancel</button>
+                </div>
+                <div class="card">
+                    <h3>Logged Daily Transactions</h3>
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Region</th>
+                                    <th>Mill Name</th>
+                                    <th>Paddy Iss.</th>
+                                    <th>BRA</th>
+                                    <th>BRC</th>
+                                    <th>RRA</th>
+                                    <th>RRC</th>
+                                    <th>Balance Paddy to be Issue</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxuBf0EkMsJYQJYtC6TOzE7cBHELkphIrLkH3sUvbiCEe1ckBYBa0mEK-vAESY4hA0AYg/exec';
+
+        const defaultRegions = [
+            "Ariyalur", "Chengalpattu", "Chennai (North)", "Chennai (South)", "Coimbatore", 
+            "Cuddalore", "Dharmapuri", "Dindigul", "Erode", "Kallakurichi", 
+            "Kancheepuram", "Kanyakumari", "Karur", "Krishnagiri", "Madurai", 
+            "Mayiladuthurai", "Nagapattinam", "Namakkal", "Nilgiris", "Perambalur", 
+            "Pudukottai", "Ramanathapuram", "Ranipet", "Salem", "Sivaganga", 
+            "Tenkasi", "Thanjavur", "Theni", "Thoothukudi", "Tiruchirappalli", 
+            "Tirunelveli", "Tirupattur", "Tiruppur", "Tiruvallur", "Tiruvannamalai", 
+            "Tiruvarur", "Vellore", "Villupuram", "Virudhunagar"
+        ];
+
+        let state = {
+            regions: JSON.parse(localStorage.getItem('tncsc_regions')) || defaultRegions.map((r, i) => ({ id: i+1, name: r, code: r.substring(0,3).toUpperCase() })),
+            mills: JSON.parse(localStorage.getItem('tncsc_mills')) || [],
+            allotments: JSON.parse(localStorage.getItem('tncsc_allotments')) || [],
+            transactions: JSON.parse(localStorage.getItem('tncsc_transactions')) || []
+        };
+
+        let editingTransIndex = null;
+        let editingAllotIndex = null;
+        let editingMillIndex = null;
+        let editingRegionIndex = null;
+
+        document.getElementById('transDate').value = new Date().toISOString().split('T')[0];
+
+        function persistLocally() {
+            localStorage.setItem('tncsc_regions', JSON.stringify(state.regions));
+            localStorage.setItem('tncsc_mills', JSON.stringify(state.mills));
+            localStorage.setItem('tncsc_allotments', JSON.stringify(state.allotments));
+            localStorage.setItem('tncsc_transactions', JSON.stringify(state.transactions));
+            refreshUI();
+        }
+
+        async function fetchAppData() {
+            try {
+                const res = await fetch(SCRIPT_URL);
+                const json = await res.json();
+                if(json.success) {
+                    document.getElementById('syncStatusBadge').innerText = "Google Sheet Connected";
+                }
+            } catch (err) {
+                console.warn("Using local storage fallback due to CORS:", err);
+                document.getElementById('syncStatusBadge').innerText = "Local Storage Mode Active";
+            }
+            refreshUI();
+        }
+
+        async function postData(action, data) {
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action, data })
+                });
+            } catch(e) {
+                console.warn("CORS block bypassed; stored locally.");
+            }
+            persistLocally();
+        }
+
+        function showAlert(message, isError = false) {
+            alert(message);
+            const alertBox = document.getElementById('globalAlert');
+            alertBox.style.display = 'block';
+            alertBox.className = `alert ${isError ? 'alert-error' : 'alert-success'}`;
+            alertBox.innerText = message;
+            setTimeout(() => { alertBox.style.display = 'none'; }, 5000);
+        }
+
+        function switchTab(tabId, btnElement) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('aside nav button').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            if(btnElement) btnElement.classList.add('active');
+            refreshUI();
+        }
+
+        function formatMonthDisplay(monthStr) {
+            if(!monthStr) return '';
+            const parts = monthStr.split('-');
+            if(parts.length === 2) {
+                const dateObj = new Date(parts[0], parseInt(parts[1], 10) - 1, 1);
+                return dateObj.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+            }
+            return monthStr;
+        }
+
+        // --- CALCULATE FINANCIALS & ALLOWABLE PADDY ---
+        function calculateMillFinancials(resetBg = false) {
+            const capacity = parseFloat(document.getElementById('millCapacityInput').value) || 0;
+            const ecoCost = parseFloat(document.getElementById('millEcoCostInput').value) || 36000;
+            const bgInput = document.getElementById('millBgInput');
+            const allowableInput = document.getElementById('millAllowablePaddy');
+
+            const maxAllowedBg = capacity * ecoCost * 0.25;
+
+            if (resetBg || !bgInput.value || editingMillIndex === null) {
+                bgInput.value = maxAllowedBg;
+            }
+
+            let currentBg = parseFloat(bgInput.value) || 0;
+
+            if (currentBg > maxAllowedBg) {
+                currentBg = maxAllowedBg;
+                bgInput.value = maxAllowedBg;
+            }
+
+            const allowablePaddy = (currentBg * 0.90) / 22000;
+            allowableInput.value = allowablePaddy.toFixed(2) + " MT";
+        }
+
+        // --- REGION MASTER ---
+        function saveRegion() {
+            const name = document.getElementById('regNameInput').value.trim();
+            const code = document.getElementById('regCodeInput').value.trim();
+            if(!name || !code) { showAlert("Region Name and Code are required", true); return; }
+            if(editingRegionIndex !== null) {
+                state.regions[editingRegionIndex].name = name;
+                state.regions[editingRegionIndex].code = code;
+                editingRegionIndex = null;
+            } else {
+                state.regions.push({ id: Date.now(), name, code });
+            }
+            resetRegionForm();
+            persistLocally();
+            showAlert("Region saved successfully!");
+        }
+        function editRegion(index) {
+            const reg = state.regions[index];
+            if(reg) {
+                document.getElementById('regNameInput').value = reg.name;
+                document.getElementById('regCodeInput').value = reg.code;
+                editingRegionIndex = index;
+            }
+        }
+        function deleteRegion(index) {
+            if(confirm("Delete this region?")) {
+                state.regions.splice(index, 1);
+                persistLocally();
+                showAlert("Region deleted.");
+            }
+        }
+        function resetRegionForm() {
+            document.getElementById('regNameInput').value = '';
+            document.getElementById('regCodeInput').value = '';
+            editingRegionIndex = null;
+        }
+
+        // --- HULLING MILL MASTER ---
+        function saveHullingMill() {
+            const regionId = document.getElementById('millRegionSelect').value;
+            const regionObj = state.regions.find(r => r.id == regionId);
+            const name = document.getElementById('millNameInput').value.trim();
+            const capacity = parseFloat(document.getElementById('millCapacityInput').value) || 0;
+            const ecoCost = parseFloat(document.getElementById('millEcoCostInput').value) || 36000;
+            const bgAmount = parseFloat(document.getElementById('millBgInput').value) || 0;
+            const millType = document.getElementById('millTypeInput').value;
+
+            if(!name || bgAmount <= 0 || capacity <= 0) { showAlert("Provide valid mill name, capacity, and BG amount.", true); return; }
+
+            const millData = { regionName: regionObj ? regionObj.name : '', millName: name, bgAmount, capacity, millType, ecoCost };
+            if(editingMillIndex !== null) {
+                state.mills[editingMillIndex] = { id: state.mills[editingMillIndex].id || Date.now(), regionId, name, bgAmount, capacity, millType, ecoCost };
+                editingMillIndex = null;
+            } else {
+                state.mills.push({ id: Date.now(), regionId, name, bgAmount, capacity, millType, ecoCost });
+            }
+            postData('saveMill', millData);
+            resetMillForm();
+            persistLocally();
+            showAlert("Mill saved successfully!");
+        }
+        function editMill(index) {
+            const mill = state.mills[index];
+            if(mill) {
+                document.getElementById('millRegionSelect').value = mill.regionId;
+                document.getElementById('millNameInput').value = mill.name;
+                document.getElementById('millCapacityInput').value = mill.capacity || 1000;
+                document.getElementById('millEcoCostInput').value = mill.ecoCost || 36000;
+                document.getElementById('millBgInput').value = mill.bgAmount;
+                document.getElementById('millTypeInput').value = mill.millType || 'Boiled Mill';
+                editingMillIndex = index;
+                calculateMillFinancials(false);
+            }
+        }
+        function deleteMill(index) {
+            if(confirm("Delete this mill?")) {
+                state.mills.splice(index, 1);
+                persistLocally();
+                showAlert("Mill deleted.");
+            }
+        }
+        function resetMillForm() {
+            document.getElementById('millNameInput').value = '';
+            document.getElementById('millCapacityInput').value = '';
+            document.getElementById('millBgInput').value = '';
+            document.getElementById('millAllowablePaddy').value = '';
+            editingMillIndex = null;
+        }
+
+        // --- ALLOTMENTS ---
+        function onRegionChangeForAlloc() {
+            const regionId = document.getElementById('allotRegionSelect').value;
+            const month = document.getElementById('allotMonth').value;
+            
+            const existingForRegion = state.allotments.find(a => a.regionId == regionId && a.month == month);
+            const hoInput = document.getElementById('hoAllotPaddy');
+            if(existingForRegion) {
+                hoInput.value = existingForRegion.hoPaddy;
+            } else {
+                hoInput.value = '';
+            }
+
+            const millSelect = document.getElementById('allotMillSelect');
+            const regionMills = state.mills.filter(m => m.regionId == regionId);
+            millSelect.innerHTML = regionMills.length > 0 
+                ? regionMills.map(m => `<option value="${m.name}">${m.name} [Capacity: ${m.capacity} MT]</option>`).join('')
+                : '<option value="">No mills registered in this region</option>';
+            
+            updateAllotmentBalanceCheck();
+        }
+
+        function updateAllotmentBalanceCheck() {
+            const regionId = document.getElementById('allotRegionSelect').value;
+            const month = document.getElementById('allotMonth').value;
+            const hoAllot = parseFloat(document.getElementById('hoAllotPaddy').value) || 0;
+            const selectedMillName = document.getElementById('allotMillSelect').value;
+            const selectedMill = state.mills.find(m => m.name === selectedMillName);
+            const millCapacity = selectedMill ? selectedMill.capacity : 0;
+            
+            const currentSubAllocTotal = state.allotments
+                .filter((a, idx) => a.regionId == regionId && a.month == month && (editingAllotIndex === null || idx !== editingAllotIndex))
+                .reduce((sum, a) => sum + (a.regPaddy || 0), 0);
+
+            const warningBox = document.getElementById('allotAllocWarning');
+            warningBox.innerHTML = `<strong>Allotment Guardrails:</strong> Region HO Allotment: <b>${hoAllot} MT</b> | Already Sub-Allocated: <b>${currentSubAllocTotal} MT</b> ${selectedMill ? `| <b>${selectedMill.name}</b> Capacity: <b>${millCapacity} MT</b>` : ''}`;
+        }
+
+        function saveAllotment() {
+            const month = document.getElementById('allotMonth').value;
+            const regionId = document.getElementById('allotRegionSelect').value;
+            const regionObj = state.regions.find(r => r.id == regionId);
+            const hoPaddy = parseFloat(document.getElementById('hoAllotPaddy').value) || 0;
+            const millName = document.getElementById('allotMillSelect').value;
+            const regPaddy = parseFloat(document.getElementById('regSubAllotPaddy').value) || 0;
+
+            if(!regionObj || !millName || hoPaddy <= 0) { showAlert("Provide valid region, constant HO allotment, and mill sub-allocation.", true); return; }
+
+            state.allotments.forEach(a => {
+                if (a.regionId == regionId && a.month == month) {
+                    a.hoPaddy = hoPaddy;
+                }
+            });
+
+            const targetMill = state.mills.find(m => m.name === millName);
+            const millCapacity = targetMill ? (targetMill.capacity || 1000) : 1000;
+
+            if (regPaddy > millCapacity) {
+                showAlert(`Blocked! Sub-allocation (${regPaddy} MT) for ${millName} cannot exceed its Hulling Capacity (${millCapacity} MT).`, true);
+                return;
+            }
+
+            const currentSubAllocTotal = state.allotments
+                .filter((a, idx) => a.regionId == regionId && a.month == month && (editingAllotIndex === null || idx !== editingAllotIndex))
+                .reduce((sum, a) => sum + (a.regPaddy || 0), 0);
+
+            if((currentSubAllocTotal + regPaddy) > hoPaddy) {
+                showAlert(`Blocked! Total Sub-Allocations (${currentSubAllocTotal + regPaddy} MT) cannot exceed Region HO Allotment (${hoPaddy} MT).`, true);
+                return;
+            }
+
+            const allotData = { month, regionName: regionObj.name, hoAllotPaddy: hoPaddy, millName, regPaddy };
+            if(editingAllotIndex !== null) {
+                state.allotments[editingAllotIndex] = { id: state.allotments[editingAllotIndex].id || Date.now(), month, regionId, hoPaddy, millName, regPaddy };
+                editingAllotIndex = null;
+            } else {
+                state.allotments.push({ id: Date.now(), month, regionId, hoPaddy, millName, regPaddy });
+            }
+            postData('saveAllotment', allotData);
+            resetAllotForm();
+            persistLocally();
+            showAlert("Sub-allocation saved successfully!");
+        }
+
+        function editAllot(index) {
+            const allot = state.allotments[index];
+            if(allot) {
+                document.getElementById('allotMonth').value = allot.month;
+                document.getElementById('allotRegionSelect').value = allot.regionId;
+                document.getElementById('hoAllotPaddy').value = allot.hoPaddy;
+                onRegionChangeForAlloc();
+                document.getElementById('allotMillSelect').value = allot.millName;
+                document.getElementById('regSubAllotPaddy').value = allot.regPaddy;
+                editingAllotIndex = index;
+                updateAllotmentBalanceCheck();
+            }
+        }
+
+        function deleteAlloc(index) {
+            state.allotments.splice(index, 1);
+            persistLocally();
+            showAlert("Sub-allocation record removed.");
+        }
+
+        function resetAllotForm() {
+            document.getElementById('regSubAllotPaddy').value = '';
+            editingAllotIndex = null;
+            onRegionChangeForAlloc();
+        }
+
+        // --- TRANSACTIONS ---
+        function updateTransactionMillContext() {
+            const millName = document.getElementById('transMillSelect').value;
+            const mill = state.mills.find(m => m.name == millName);
+            const varietySelect = document.getElementById('transRiceVariety');
+            if(mill) {
+                if(mill.millType === 'Boiled Mill') {
+                    varietySelect.innerHTML = `
+                        <option value="BRA">BRA (Boiled - Grade A @ 67%)</option>
+                        <option value="BRC">BRC (Boiled - Common @ 68%)</option>
+                    `;
+                } else {
+                    varietySelect.innerHTML = `
+                        <option value="RRA">RRA (Raw - Grade A @ 67%)</option>
+                        <option value="RRC">RRC (Raw - Common @ 68%)</option>
+                    `;
+                }
+            }
+            checkBgLimit();
+        }
+
+        function checkBgLimit() {
+            const millName = document.getElementById('transMillSelect').value;
+            const mill = state.mills.find(m => m.name == millName);
+            const warningBox = document.getElementById('bgWarningBox');
+            if(!mill) return;
+
+            const maxBgAllowed = (mill.bgAmount * 0.90) / 22000;
+            const millSubAllots = state.allotments.filter(a => a.millName == mill.name);
+            const totalSubAllotted = millSubAllots.reduce((s, a) => s + (a.regPaddy || 0), 0);
+
+            const millTrans = state.transactions.filter((t, idx) => t.millName == mill.name && (editingTransIndex === null || idx !== editingTransIndex));
+            const totalIssued = millTrans.reduce((s, t) => s + (t.paddyRec || 0), 0);
+            
+            const equivalentPaddyDeposited = millTrans.reduce((s, t) => {
+                const dep = t.riceDep || 0;
+                const ratio = (t.riceVariety === 'BRA' || t.riceVariety === 'RRA') ? 0.67 : 0.68;
+                return s + (dep / ratio);
+            }, 0);
+
+            const netPendingPaddy = Math.max(0, totalIssued - equivalentPaddyDeposited);
+
+            warningBox.style.display = 'block';
+            warningBox.innerHTML = `<strong>Guardrails for ${mill.name} (${mill.millType}):</strong> Sub-Allocated: <b>${totalSubAllotted} MT</b> | 90% BG Limit: <b>${maxBgAllowed.toFixed(2)} MT</b> | Total Issued: <b>${totalIssued.toFixed(2)} MT</b> | Net Pending Paddy: <b>${netPendingPaddy.toFixed(2)} MT</b>`;
+        }
+
+        function saveTransaction() {
+            try {
+                const date = document.getElementById('transDate').value;
+                const millName = document.getElementById('transMillSelect').value;
+                const mill = state.mills.find(m => m.name == millName);
+                const paddyRec = parseFloat(document.getElementById('transPaddyRec').value) || 0;
+                const riceVariety = document.getElementById('transRiceVariety').value;
+                const riceDep = parseFloat(document.getElementById('transRiceDep').value) || 0;
+
+                if(!mill) {
+                    showAlert("Please select a valid Hulling Mill.", true);
+                    return;
+                }
+
+                if(paddyRec <= 0 && riceDep <= 0) {
+                    showAlert("Please enter either Paddy Issued or CMR Rice Deposited quantity.", true);
+                    return;
+                }
+
+                const millTrans = state.transactions.filter((t, idx) => t.millName == mill.name && (editingTransIndex === null || idx !== editingTransIndex));
+                const totalIssued = millTrans.reduce((s, t) => s + (t.paddyRec || 0), 0) + paddyRec;
+                
+                // Calculate current net pending paddy including this new issue request
+                const equivalentPaddyDeposited = millTrans.reduce((s, t) => {
+                    const dep = t.riceDep || 0;
+                    const ratio = (t.riceVariety === 'BRA' || t.riceVariety === 'RRA') ? 0.67 : 0.68;
+                    return s + (dep / ratio);
+                }, 0);
+                const netPendingPaddy = totalIssued - equivalentPaddyDeposited;
+
+                // 1. Sub-Allocation Limit Check
+                const millSubAllots = state.allotments.filter(a => a.millName == mill.name);
+                const totalSubAllotted = millSubAllots.reduce((s, a) => s + (a.regPaddy || 0), 0);
+                if (totalSubAllotted > 0 && totalIssued > totalSubAllotted) {
+                    showAlert(`Blocked! Total issued paddy (${totalIssued.toFixed(2)} MT) cannot exceed the Sub-Allocation limit (${totalSubAllotted} MT).`, true);
+                    return;
+                }
+
+                // 2. 90% Bank Guarantee Active Pending Limit Check
+                const maxBgAllowed = (mill.bgAmount * 0.90) / 22000;
+                if (netPendingPaddy > maxBgAllowed) {
+                    showAlert(`Blocked! Active un-deposited pending paddy (${netPendingPaddy.toFixed(2)} MT) cannot exceed the 90% Bank Guarantee allowable limit (${maxBgAllowed.toFixed(2)} MT). Please deposit CMR rice first.`, true);
+                    return;
+                }
+
+                const regionObj = state.regions.find(r => r.id == mill.regionId);
+                const transData = { date, regionName: regionObj ? regionObj.name : '', millName, riceVariety, paddyRec, riceDep };
+
+                if(editingTransIndex !== null && editingTransIndex !== "") {
+                    state.transactions[editingTransIndex] = { id: state.transactions[editingTransIndex].id || Date.now(), date, millName, riceVariety, paddyRec, riceDep };
+                    editingTransIndex = null;
+                } else {
+                    state.transactions.push({ id: Date.now(), date, millName, riceVariety, paddyRec, riceDep });
+                }
+                postData('saveTransaction', transData);
+                resetTransForm();
+                persistLocally();
+                showAlert("Transaction saved successfully!");
+            } catch (err) {
+                showAlert("Error saving transaction: " + err.message, true);
+            }
+        }
+
+        function editTransaction(index) {
+            const t = state.transactions[index];
+            if(t) {
+                document.getElementById('transDate').value = t.date;
+                document.getElementById('transMillSelect').value = t.millName;
+                updateTransactionMillContext();
+                document.getElementById('transRiceVariety').value = t.riceVariety || 'BRA';
+                document.getElementById('transPaddyRec').value = t.paddyRec;
+                document.getElementById('transRiceDep').value = t.riceDep;
+                editingTransIndex = index;
+            }
+        }
+
+        function deleteTransaction(index) {
+            state.transactions.splice(index, 1);
+            persistLocally();
+            showAlert("Transaction deleted.");
+        }
+
+        function resetTransForm() {
+            document.getElementById('transPaddyRec').value = '0';
+            document.getElementById('transRiceDep').value = '0';
+            editingTransIndex = null;
+            updateTransactionMillContext();
+        }
+
+        // --- UI REFRESH ---
+        function refreshUI() {
+            const regionSelects = [document.getElementById('millRegionSelect'), document.getElementById('allotRegionSelect')];
+            regionSelects.forEach(sel => {
+                if(!sel) return;
+                const val = sel.value;
+                sel.innerHTML = state.regions.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+                if(val) sel.value = val;
+            });
+
+            onRegionChangeForAlloc();
+
+            const transSel = document.getElementById('transMillSelect');
+            if(transSel) {
+                const val = transSel.value;
+                transSel.innerHTML = state.mills.map(m => `<option value="${m.name}">${m.name} [${m.millType}] (${state.regions.find(r=>r.id==m.regionId)?.name || ''})</option>`).join('');
+                if(val) transSel.value = val;
+            }
+            updateTransactionMillContext();
+
+            document.getElementById('regionTableBody').innerHTML = state.regions.map((r, i) => `
+                <tr><td>${i+1}</td><td><b>${r.name}</b></td><td>${r.code}</td>
+                <td><button class="btn" style="padding:4px 8px; font-size:0.8rem;" onclick="editRegion(${i})">Edit</button> 
+                <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem;" onclick="deleteRegion(${i})">Delete</button></td></tr>
+            `).join('');
+
+            document.getElementById('millTableBody').innerHTML = state.mills.map((m, i) => {
+                const reg = state.regions.find(r => r.id == m.regionId);
+                const maxPaddy = ((m.bgAmount * 0.90) / 22000).toFixed(2);
+                return `<tr>
+                    <td><b>${m.name}</b></td><td>${reg ? reg.name : 'N/A'}</td>
+                    <td>${m.capacity || 1000} MT</td>
+                    <td>₹${Number(m.ecoCost || 36000).toLocaleString()}</td>
+                    <td>₹${Number(m.bgAmount).toLocaleString()}</td>
+                    <td><b>${maxPaddy} MT</b></td>
+                    <td>${m.millType || 'Boiled Mill'}</td>
+                    <td><button class="btn" style="padding:4px 8px;" onclick="editMill(${i})">Edit</button>
+                    <button class="btn btn-danger" style="padding:4px 8px;" onclick="deleteMill(${i})">Delete</button></td>
+                </tr>`;
+            }).join('');
+
+            document.getElementById('allotTableBody').innerHTML = state.allotments.map((a, i) => {
+                const reg = state.regions.find(r => r.id == a.regionId);
+                return `<tr>
+                    <td>${formatMonthDisplay(a.month)}</td><td>${reg ? reg.name : ''}</td><td>${a.hoPaddy || 0} MT</td><td>${a.millName}</td><td>${a.regPaddy} MT</td>
+                    <td><button class="btn" style="padding:4px 8px;" onclick="editAllot(${i})">Edit</button>
+                    <button class="btn btn-danger" style="padding:4px 8px;" onclick="deleteAlloc(${i})">Remove</button></td>
+                </tr>`;
+            }).join('');
+
+            // Balance Paddy to be Issue = Sub-Allocation minus Total Issued
+            let millCumulativeIssued = {};
+
+            document.getElementById('transTableBody').innerHTML = state.transactions.map((t, i) => {
+                const mill = state.mills.find(m => m.name == t.millName);
+                const reg = state.regions.find(r => r.id == mill?.regionId);
+
+                millCumulativeIssued[t.millName] = (millCumulativeIssued[t.millName] || 0) + (t.paddyRec || 0);
+
+                const millSubAllots = state.allotments.filter(a => a.millName == t.millName);
+                const totalSubAllotted = millSubAllots.reduce((s, a) => s + (a.regPaddy || 0), 0);
+                const maxLimit = totalSubAllotted > 0 ? totalSubAllotted : (mill?.capacity || 1000);
+                
+                const balancePaddyToBeIssued = Math.max(0, maxLimit - millCumulativeIssued[t.millName]);
+
+                const varCode = t.riceVariety || 'BRA';
+                const depQty = t.riceDep || 0;
+                const bra = (varCode === 'BRA') ? `${depQty} MT` : '0 MT';
+                const brc = (varCode === 'BRC') ? `${depQty} MT` : '0 MT';
+                const rra = (varCode === 'RRA') ? `${depQty} MT` : '0 MT';
+                const rrc = (varCode === 'RRC') ? `${depQty} MT` : '0 MT';
+
+                return `<tr>
+                    <td>${t.date}</td>
+                    <td>${reg?.name || ''}</td>
+                    <td>${t.millName}</td>
+                    <td>${t.paddyRec} MT</td>
+                    <td>${bra}</td>
+                    <td>${brc}</td>
+                    <td>${rra}</td>
+                    <td>${rrc}</td>
+                    <td><b>${balancePaddyToBeIssued.toFixed(2)} MT</b></td>
+                    <td><button class="btn" style="padding:4px 8px;" onclick="editTransaction(${i})">Edit</button>
+                    <button class="btn btn-danger" style="padding:4px 8px;" onclick="deleteTransaction(${i})">Delete</button></td>
+                </tr>`;
+            }).join('');
+
+            document.getElementById('metricRegions').innerText = state.regions.length;
+            document.getElementById('metricMills').innerText = state.mills.length;
+
+            const uniqueRegionAllots = {};
+            state.allotments.forEach(a => { uniqueRegionAllots[a.regionId] = Math.max(uniqueRegionAllots[a.regionId] || 0, a.hoPaddy || 0); });
+            const totalAllotted = Object.values(uniqueRegionAllots).reduce((s,v)=>s+v,0);
+            const totalDeposited = state.transactions.reduce((s,t)=>s+(t.riceDep||0),0);
+
+            document.getElementById('metricPaddyAllotted').innerText = totalAllotted.toFixed(2);
+            document.getElementById('metricCmrDeposited').innerText = totalDeposited.toFixed(2);
+
+            renderReportTable();
+            checkBgLimit();
+        }
+
+        function updateReportView() { renderReportTable(); }
+
+        function renderReportTable() {
+            const level = document.getElementById('reportLevel').value;
+            const thead = document.querySelector('#reportTable thead');
+            const tbody = document.querySelector('#reportTable tbody');
+            const title = document.getElementById('reportTableTitle');
+
+            if(level === 'region') {
+                title.innerText = "Region-Level Summary Report (39 Regions)";
+                thead.innerHTML = `<tr><th>Region Name</th><th>Active Mills</th><th>HO Allotted (MT)</th><th>Paddy Issued (MT)</th><th>CMR Deposited (MT)</th><th>Paddy Issue %</th><th>CMR Deposit %</th></tr>`;
+                tbody.innerHTML = state.regions.map(r => {
+                    const rMills = state.mills.filter(m => m.regionId == r.id);
+                    const millNames = rMills.map(m => m.name);
+                    const rAllotRecs = state.allotments.filter(a => a.regionId == r.id);
+                    const rAllot = rAllotRecs.length > 0 ? Math.max(...rAllotRecs.map(a => a.hoPaddy || 0)) : 0;
+                    const rTrans = state.transactions.filter(t => millNames.includes(t.millName));
+                    const issued = rTrans.reduce((s,t)=>s+(t.paddyRec||0),0);
+                    const dep = rTrans.reduce((s,t)=>s+(t.riceDep||0),0);
+                    
+                    const paddyIssuePct = rAllot > 0 ? ((issued / rAllot) * 100).toFixed(1) : '0.0';
+                    const cmrDepositPct = issued > 0 ? ((dep / issued) * 100).toFixed(1) : '0.0';
+
+                    return `<tr><td><b>${r.name}</b></td><td>${rMills.length}</td><td>${rAllot.toFixed(2)}</td><td>${issued.toFixed(2)}</td><td>${dep.toFixed(2)}</td><td><b>${paddyIssuePct}%</b></td><td><b>${cmrDepositPct}%</b></td></tr>`;
+                }).join('');
+            } else if(level === 'mill') {
+                title.innerText = "Mill-Level Detailed Report";
+                thead.innerHTML = `<tr><th>Mill Name</th><th>Region</th><th>Mill Type</th><th>Capacity</th><th>Paddy Issued</th><th>CMR Deposited</th><th>CMR Deposit %</th><th>Balance Paddy to be Issue</th></tr>`;
+                tbody.innerHTML = state.mills.map(m => {
+                    const reg = state.regions.find(r => r.id == m.regionId);
+                    const mTrans = state.transactions.filter(t => t.millName == m.name);
+                    const issued = mTrans.reduce((s,t)=>s+(t.paddyRec||0),0);
+                    const dep = mTrans.reduce((s,t)=>s+(t.riceDep||0),0);
+                    const cmrDepositPct = issued > 0 ? ((dep / issued) * 100).toFixed(1) : '0.0';
+                    
+                    const millSubAllots = state.allotments.filter(a => a.millName == m.name);
+                    const totalSubAllotted = millSubAllots.reduce((s, a) => s + (a.regPaddy || 0), 0);
+                    const maxLimit = totalSubAllotted > 0 ? totalSubAllotted : (m.capacity || 1000);
+                    const balancePaddyToBeIssued = Math.max(0, maxLimit - issued);
+
+                    return `<tr><td><b>${m.name}</b></td><td>${reg?.name || ''}</td><td>${m.millType}</td><td>${m.capacity || 1000} MT</td><td>${issued.toFixed(2)}</td><td>${dep.toFixed(2)}</td><td><b>${cmrDepositPct}%</b></td><td><b>${balancePaddyToBeIssued.toFixed(2)} MT</b></td></tr>`;
+                }).join('');
+            } else {
+                title.innerText = "Head Office Level Summary";
+                thead.innerHTML = `<tr><th>Metric Description</th><th>Total Value / Quantity</th></tr>`;
+                const totBG = state.mills.reduce((s,m)=>s+(m.bgAmount||0),0);
+                const totIssued = state.transactions.reduce((s,t)=>s+(t.paddyRec||0),0);
+                const totDep = state.transactions.reduce((s,t)=>s+(t.riceDep||0),0);
+                tbody.innerHTML = `
+                    <tr><td>Total Regions</td><td>39</td></tr>
+                    <tr><td>Total Active Mills</td><td>${state.mills.length}</td></tr>
+                    <tr><td>Total Bank Guarantee</td><td>₹${totBG.toLocaleString()}</td></tr>
+                    <tr><td>Total Paddy Issued</td><td>${totIssued.toFixed(2)} MT</td></tr>
+                    <tr><td>Total CMR Deposited</td><td>${totDep.toFixed(2)} MT</td></tr>
+                `;
+            }
+        }
+
+        function exportToExcel() {
+            let csv = [];
+            const rows = document.querySelectorAll("#reportTable tr");
+            for (let i = 0; i < rows.length; i++) {
+                let row = [], cols = rows[i].querySelectorAll("td, th");
+                for (let j = 0; j < cols.length; j++) row.push('"' + cols[j].innerText.replace(/"/g, '""') + '"');
+                csv.push(row.join(","));
+            }
+            const blob = new Blob([csv.join("\n")], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'TNCSC_Report.csv'; a.click();
+            showAlert("Report exported to Excel successfully!");
+        }
+
+        function exportToPDF() {
+            const printWindow = window.open('', '_blank');
+            const tableHTML = document.querySelector("#reportTable").outerHTML;
+            const title = document.querySelector("#reportTableTitle").innerText;
+            const dateStr = new Date().toLocaleDateString();
+
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>TNCSC Official Report - ${title}</title>
+                    <style>
+                        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; color: #333; }
+                        h2 { color: #1b5e20; text-align: center; margin-bottom: 5px; text-transform: uppercase; }
+                        .subtitle { text-align: center; font-size: 0.9rem; color: #666; margin-bottom: 25px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.85rem; }
+                        th, td { border: 1px solid #999; padding: 10px; text-align: left; }
+                        th { background-color: #1b5e20; color: white; }
+                        tr:nth-child(even) { background-color: #f9f9f9; }
+                        .footer { margin-top: 40px; display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: bold; }
+                    </style>
+                </head>
+                <body>
+                    <h2>TAMIL NADU CIVIL SUPPLIES CORPORATION (TNCSC)</h2>
+                    <div class="subtitle">Hulling Agents & CMR Monitoring System — ${title} | Generated On: ${dateStr}</div>
+                    ${tableHTML}
+                    <div class="footer">
+                        <div>Authorized Signatory (HO / Region)</div>
+                        <div>System Generated Official Report</div>
+                    </div>
+                    <script>
+                        window.onload = function() { window.print(); window.close(); }
+                    <\/script>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+        }
+
+        fetchAppData();
+    </script>
+</body>
+</html>
