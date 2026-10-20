@@ -81,7 +81,7 @@
     <main>
         <header>
             <h1 id="pageTitle">Dashboard & Summary Reports</h1>
-            <div class="user-badge" id="syncStatusBadge">System Active</div>
+            <div class="user-badge" id="syncStatusBadge">Connecting to Google Sheet...</div>
         </header>
 
         <div class="content-body">
@@ -289,9 +289,9 @@
 
         let state = {
             regions: JSON.parse(localStorage.getItem('tncsc_regions')) || defaultRegions.map((r, i) => ({ id: i+1, name: r, code: r.substring(0,3).toUpperCase() })),
-            mills: JSON.parse(localStorage.getItem('tncsc_mills')) || [],
-            allotments: JSON.parse(localStorage.getItem('tncsc_allotments')) || [],
-            transactions: JSON.parse(localStorage.getItem('tncsc_transactions')) || []
+            mills: [],
+            allotments: [],
+            transactions: []
         };
 
         let editingTransIndex = null;
@@ -315,10 +315,56 @@
                 const json = await res.json();
                 if(json.success) {
                     document.getElementById('syncStatusBadge').innerText = "Google Sheet Connected";
+                    
+                    // Map your code.gs backend response keys to state format
+                    if (json.mills) {
+                        state.mills = json.mills.map(m => {
+                            const regObj = state.regions.find(r => r.name === m.Region_Name);
+                            return {
+                                id: m.Mill_ID || Date.now(),
+                                regionId: regObj ? regObj.id : 1,
+                                name: m.Mill_Name,
+                                bgAmount: parseFloat(m.Bank_Guarantee_Amount) || 0,
+                                capacity: parseFloat(m.Hulling_Capacity) || 1000,
+                                millType: m.Mill_Type || 'Boiled Mill',
+                                ecoCost: 36000
+                            };
+                        });
+                    }
+
+                    if (json.allotments) {
+                        state.allotments = json.allotments.map(a => {
+                            const regObj = state.regions.find(r => r.name === a.Region_Name);
+                            return {
+                                id: a.Allotment_ID || Date.now(),
+                                month: a.Month_Year || '2026-10',
+                                regionId: regObj ? regObj.id : 1,
+                                hoPaddy: parseFloat(a.HO_Allotment_Paddy_MT) || 0,
+                                millName: a.Mill_Name,
+                                regPaddy: parseFloat(a.Mill_Sub_Allotment_MT) || 0
+                            };
+                        });
+                    }
+
+                    if (json.transactions) {
+                        state.transactions = json.transactions.map(t => {
+                            return {
+                                id: t.Transaction_ID || Date.now(),
+                                date: t.Date ? String(t.Date).split('T')[0] : '',
+                                millName: t.Mill_Name,
+                                riceVariety: t.Rice_Variety || 'BRA',
+                                paddyRec: parseFloat(t.Paddy_Received_MT) || 0,
+                                riceDep: parseFloat(t.CMR_Deposited_MT) || 0
+                            };
+                        });
+                    }
                 }
             } catch (err) {
-                console.warn("Using local storage fallback due to CORS:", err);
+                console.warn("Using local storage fallback due to CORS/Network error:", err);
                 document.getElementById('syncStatusBadge').innerText = "Local Storage Mode Active";
+                state.mills = JSON.parse(localStorage.getItem('tncsc_mills')) || [];
+                state.allotments = JSON.parse(localStorage.getItem('tncsc_allotments')) || [];
+                state.transactions = JSON.parse(localStorage.getItem('tncsc_transactions')) || [];
             }
             refreshUI();
         }
@@ -330,7 +376,7 @@
                     body: JSON.stringify({ action, data })
                 });
             } catch(e) {
-                console.warn("CORS block bypassed; stored locally.");
+                console.warn("CORS block encountered; data saved locally.");
             }
             persistLocally();
         }
@@ -653,7 +699,6 @@
                 const millTrans = state.transactions.filter((t, idx) => t.millName == mill.name && (editingTransIndex === null || idx !== editingTransIndex));
                 const totalIssued = millTrans.reduce((s, t) => s + (t.paddyRec || 0), 0) + paddyRec;
                 
-                // Calculate current net pending paddy including this new issue request
                 const equivalentPaddyDeposited = millTrans.reduce((s, t) => {
                     const dep = t.riceDep || 0;
                     const ratio = (t.riceVariety === 'BRA' || t.riceVariety === 'RRA') ? 0.67 : 0.68;
@@ -661,7 +706,6 @@
                 }, 0);
                 const netPendingPaddy = totalIssued - equivalentPaddyDeposited;
 
-                // 1. Sub-Allocation Limit Check
                 const millSubAllots = state.allotments.filter(a => a.millName == mill.name);
                 const totalSubAllotted = millSubAllots.reduce((s, a) => s + (a.regPaddy || 0), 0);
                 if (totalSubAllotted > 0 && totalIssued > totalSubAllotted) {
@@ -669,7 +713,6 @@
                     return;
                 }
 
-                // 2. 90% Bank Guarantee Active Pending Limit Check
                 const maxBgAllowed = (mill.bgAmount * 0.90) / 22000;
                 if (netPendingPaddy > maxBgAllowed) {
                     showAlert(`Blocked! Active un-deposited pending paddy (${netPendingPaddy.toFixed(2)} MT) cannot exceed the 90% Bank Guarantee allowable limit (${maxBgAllowed.toFixed(2)} MT). Please deposit CMR rice first.`, true);
@@ -770,7 +813,6 @@
                 </tr>`;
             }).join('');
 
-            // Balance Paddy to be Issue = Sub-Allocation minus Total Issued
             let millCumulativeIssued = {};
 
             document.getElementById('transTableBody').innerHTML = state.transactions.map((t, i) => {
@@ -934,6 +976,7 @@
             printWindow.document.close();
         }
 
+        // Initialize and fetch data from Google Sheet on load
         fetchAppData();
     </script>
 </body>
