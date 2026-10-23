@@ -19,7 +19,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: var(--bg-light); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
 
-        aside { width: 260px; background-color: var(--primary); color: var(--white); display: flex; flex-direction: column; }
+        aside { width: 260px; background-color: var(--primary); color: var(--white); display: flex; flex-direction: column; flex-shrink: 0; }
         aside .logo { padding: 20px; font-size: 1.1rem; font-weight: bold; background-color: var(--primary-dark); text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
         aside nav { flex: 1; padding: 15px 0; overflow-y: auto; }
         aside nav button { width: 100%; text-align: left; padding: 12px 20px; background: none; border: none; color: var(--white); font-size: 0.95rem; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 10px; }
@@ -42,10 +42,10 @@
         table th { background-color: #f1f8e9; color: var(--primary-dark); }
         table tr:hover { background-color: #fafafa; }
 
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 15px; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px; align-items: flex-end; }
         .form-group { display: flex; flex-direction: column; gap: 5px; }
         .form-group label { font-size: 0.85rem; font-weight: 600; color: #555; }
-        .form-group input, .form-group select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.9rem; }
+        .form-group input, .form-group select { padding: 9px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.9rem; width: 100%; background: #fff; }
         
         .btn { padding: 9px 18px; background-color: var(--primary); color: var(--white); border: none; border-radius: 4px; cursor: pointer; font-weight: 600; transition: background 0.2s; }
         .btn:hover { background-color: var(--primary-dark); }
@@ -316,7 +316,6 @@
                 if(json.success) {
                     document.getElementById('syncStatusBadge').innerText = "Google Sheet Connected";
                     
-                    // Map your code.gs backend response keys to state format
                     if (json.mills) {
                         state.mills = json.mills.map(m => {
                             const regObj = state.regions.find(r => r.name === m.Region_Name);
@@ -335,9 +334,11 @@
                     if (json.allotments) {
                         state.allotments = json.allotments.map(a => {
                             const regObj = state.regions.find(r => r.name === a.Region_Name);
+                            let rawMonth = a.Month_Year ? String(a.Month_Year) : '2026-10';
+                            if(rawMonth.includes('T')) rawMonth = rawMonth.split('T')[0].substring(0, 7);
                             return {
                                 id: a.Allotment_ID || Date.now(),
-                                month: a.Month_Year || '2026-10',
+                                month: rawMonth,
                                 regionId: regObj ? regObj.id : 1,
                                 hoPaddy: parseFloat(a.HO_Allotment_Paddy_MT) || 0,
                                 millName: a.Mill_Name,
@@ -348,9 +349,11 @@
 
                     if (json.transactions) {
                         state.transactions = json.transactions.map(t => {
+                            let rawDate = t.Date ? String(t.Date) : '';
+                            if(rawDate.includes('T')) rawDate = rawDate.split('T')[0];
                             return {
                                 id: t.Transaction_ID || Date.now(),
-                                date: t.Date ? String(t.Date).split('T')[0] : '',
+                                date: rawDate,
                                 millName: t.Mill_Name,
                                 riceVariety: t.Rice_Variety || 'BRA',
                                 paddyRec: parseFloat(t.Paddy_Received_MT) || 0,
@@ -408,13 +411,14 @@
             return monthStr;
         }
 
-        // --- CALCULATE FINANCIALS & ALLOWABLE PADDY ---
+        // --- ACCURATE FINANCIAL & 90% ALLOWABLE PADDY CALCULATION ---
         function calculateMillFinancials(resetBg = false) {
             const capacity = parseFloat(document.getElementById('millCapacityInput').value) || 0;
             const ecoCost = parseFloat(document.getElementById('millEcoCostInput').value) || 36000;
             const bgInput = document.getElementById('millBgInput');
             const allowableInput = document.getElementById('millAllowablePaddy');
 
+            // 25% Bank Guarantee value based on capacity & economic cost (e.g. 1000 MT * 36000 * 0.25 = 9,000,000)
             const maxAllowedBg = capacity * ecoCost * 0.25;
 
             if (resetBg || !bgInput.value || editingMillIndex === null) {
@@ -422,17 +426,16 @@
             }
 
             let currentBg = parseFloat(bgInput.value) || 0;
-
             if (currentBg > maxAllowedBg) {
                 currentBg = maxAllowedBg;
                 bgInput.value = maxAllowedBg;
             }
 
-            const allowablePaddy = (currentBg * 0.90) / 22000;
+            // Correct 90% Allowable Paddy formula based on Bank Guarantee proportion relative to economic cost or direct conversion rate
+            const allowablePaddy = currentBg / ecoCost * 0.90 * 1000; 
             allowableInput.value = allowablePaddy.toFixed(2) + " MT";
         }
 
-        // --- REGION MASTER ---
         function saveRegion() {
             const name = document.getElementById('regNameInput').value.trim();
             const code = document.getElementById('regCodeInput').value.trim();
@@ -448,6 +451,7 @@
             persistLocally();
             showAlert("Region saved successfully!");
         }
+
         function editRegion(index) {
             const reg = state.regions[index];
             if(reg) {
@@ -456,6 +460,7 @@
                 editingRegionIndex = index;
             }
         }
+
         function deleteRegion(index) {
             if(confirm("Delete this region?")) {
                 state.regions.splice(index, 1);
@@ -463,13 +468,13 @@
                 showAlert("Region deleted.");
             }
         }
+
         function resetRegionForm() {
             document.getElementById('regNameInput').value = '';
             document.getElementById('regCodeInput').value = '';
             editingRegionIndex = null;
         }
 
-        // --- HULLING MILL MASTER ---
         function saveHullingMill() {
             const regionId = document.getElementById('millRegionSelect').value;
             const regionObj = state.regions.find(r => r.id == regionId);
@@ -493,6 +498,7 @@
             persistLocally();
             showAlert("Mill saved successfully!");
         }
+
         function editMill(index) {
             const mill = state.mills[index];
             if(mill) {
@@ -506,6 +512,7 @@
                 calculateMillFinancials(false);
             }
         }
+
         function deleteMill(index) {
             if(confirm("Delete this mill?")) {
                 state.mills.splice(index, 1);
@@ -513,6 +520,7 @@
                 showAlert("Mill deleted.");
             }
         }
+
         function resetMillForm() {
             document.getElementById('millNameInput').value = '';
             document.getElementById('millCapacityInput').value = '';
@@ -521,7 +529,6 @@
             editingMillIndex = null;
         }
 
-        // --- ALLOTMENTS ---
         function onRegionChangeForAlloc() {
             const regionId = document.getElementById('allotRegionSelect').value;
             const month = document.getElementById('allotMonth').value;
@@ -631,7 +638,6 @@
             onRegionChangeForAlloc();
         }
 
-        // --- TRANSACTIONS ---
         function updateTransactionMillContext() {
             const millName = document.getElementById('transMillSelect').value;
             const mill = state.mills.find(m => m.name == millName);
@@ -658,7 +664,7 @@
             const warningBox = document.getElementById('bgWarningBox');
             if(!mill) return;
 
-            const maxBgAllowed = (mill.bgAmount * 0.90) / 22000;
+            const maxBgAllowed = mill.bgAmount / (mill.ecoCost || 36000) * 0.90 * 1000;
             const millSubAllots = state.allotments.filter(a => a.millName == mill.name);
             const totalSubAllotted = millSubAllots.reduce((s, a) => s + (a.regPaddy || 0), 0);
 
@@ -713,7 +719,7 @@
                     return;
                 }
 
-                const maxBgAllowed = (mill.bgAmount * 0.90) / 22000;
+                const maxBgAllowed = mill.bgAmount / (mill.ecoCost || 36000) * 0.90 * 1000;
                 if (netPendingPaddy > maxBgAllowed) {
                     showAlert(`Blocked! Active un-deposited pending paddy (${netPendingPaddy.toFixed(2)} MT) cannot exceed the 90% Bank Guarantee allowable limit (${maxBgAllowed.toFixed(2)} MT). Please deposit CMR rice first.`, true);
                     return;
@@ -763,7 +769,6 @@
             updateTransactionMillContext();
         }
 
-        // --- UI REFRESH ---
         function refreshUI() {
             const regionSelects = [document.getElementById('millRegionSelect'), document.getElementById('allotRegionSelect')];
             regionSelects.forEach(sel => {
@@ -791,7 +796,7 @@
 
             document.getElementById('millTableBody').innerHTML = state.mills.map((m, i) => {
                 const reg = state.regions.find(r => r.id == m.regionId);
-                const maxPaddy = ((m.bgAmount * 0.90) / 22000).toFixed(2);
+                const maxPaddy = (m.bgAmount / (m.ecoCost || 36000) * 0.90 * 1000).toFixed(2);
                 return `<tr>
                     <td><b>${m.name}</b></td><td>${reg ? reg.name : 'N/A'}</td>
                     <td>${m.capacity || 1000} MT</td>
@@ -976,7 +981,6 @@
             printWindow.document.close();
         }
 
-        // Initialize and fetch data from Google Sheet on load
         fetchAppData();
     </script>
 </body>
